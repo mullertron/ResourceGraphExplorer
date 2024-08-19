@@ -1,5 +1,36 @@
 # ResourceGraphExplorer
+## find Availability Sets and Subscription Names
 
+~~~~~
+resources
+    | where type == "microsoft.compute/virtualmachines"
+    | where subscriptionId != "0217d7ee-f311-46a5-9f38-645d11abadd6" //not Nutanix
+    | project vmName = name, rg = resourceGroup, subscriptionId
+    | order by subscriptionId, vmName
+    | join kind=leftouter
+(resources
+| where type == "microsoft.compute/availabilitysets"
+| project availabilitySetName = name, availabilitySetId = id, resourceGroup, subscriptionId
+| join kind=inner(
+    resources
+    | where type == "microsoft.compute/virtualmachines"
+    | project vmName = name, vmId = id, availabilitySetId = tostring(properties.availabilitySet.id)
+) on availabilitySetId
+| project resourceGroup, availabilitySetName, vmName, availabilitySetId, vmId, subscriptionId
+| order by subscriptionId, resourceGroup, availabilitySetName, vmName desc
+| extend Rank=row_number(1, prev(availabilitySetName) != availabilitySetName))
+on vmName
+| extend AvailbilitySetComment = case (Rank < 20,  "In Availability Set",
+                                        "No Availability Set") 
+| extend SubscriptionName = case (subscriptionId == "ab958f00-7445-461c-b9a8-9701a71ed614",  "SNI Zone",
+                                    subscriptionId == "50402ad3-4de5-4900-8c28-ed7413735798" , "Security Cloud",
+                                    subscriptionId == "d9ad2526-fba1-4657-a959-184ba3b1f5b0" , "HPC-PRD-CAAS-01",
+                                    subscriptionId == "a4580f7c-c924-4aa8-84ea-003f6f599dc6" , "BIA Dev and Test",
+                                    subscriptionId == "229e37f8-35dc-4414-8745-8dc3ded0ecb6" , "BIA Production",
+                                    "No Identified Subscription")
+| order by subscriptionId, resourceGroup, vmName
+
+~~~~~
 ## Find Availability Set VM's
 ~~~~~
 resources
