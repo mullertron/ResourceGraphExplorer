@@ -1,5 +1,29 @@
 # ResourceGraphExplorer
 
+## Find Availability Set VM's
+~~~~~
+resources
+    | where type == "microsoft.compute/virtualmachines"
+    | where subscriptionId != "0217d7ee-f311-46a5-9f38-645d11abadd6" //not Nutanix
+    | project vmName = name, rg = resourceGroup, subscriptionId
+    | order by subscriptionId, vmName
+    | join kind=leftouter
+(resources
+| where type == "microsoft.compute/availabilitysets"
+| project availabilitySetName = name, availabilitySetId = id, resourceGroup, subscriptionId
+| join kind=inner(
+    resources
+    | where type == "microsoft.compute/virtualmachines"
+    | project vmName = name, vmId = id, availabilitySetId = tostring(properties.availabilitySet.id)
+) on availabilitySetId
+| project resourceGroup, availabilitySetName, vmName, availabilitySetId, vmId, subscriptionId
+| order by subscriptionId, resourceGroup, availabilitySetName, vmName desc
+| extend Rank=row_number(1, prev(availabilitySetName) != availabilitySetName))
+on vmName
+| extend chips = case (Rank < 20,  "In Availability Set",
+                    "No Availability Set") 
+| order by subscriptionId, resourceGroup, vmName
+~~~~~
 ## Get Created Date of a VM
 ~~~~~
 resources
